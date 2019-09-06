@@ -1,0 +1,209 @@
+---
+title: 'Chapter 6: Latin Americans political culture and citizenship norms'
+author: "Daniel Miranda, Loreto Muñoz & Catalina Miranda"
+date: "5 de septiembre de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+
+```{r, include=FALSE}
+options(scipen=999)
+#Paquetes
+library(knitr)
+library(DT)
+library(plyr)
+library(dplyr)
+library(haven)
+library(texreg) 
+library(xtable) 
+library(kableExtra) 
+library(ggplot2)
+library(psych)
+library(purrr)
+library(tidyr)
+library(sjmisc)
+library(Hmisc)
+library(reshape)
+library(VIM)
+library(stringr)
+library(skimr)
+library(lme4)
+library(broom)
+library(survey)
+library(srvyr)
+library(foreign)
+library(readstata13)
+```
+
+```{r}
+rm(list = ls())
+iccs_2016_lat_lca <- read.dta13("C:/Users/catac/Dropbox/book_buenciudadano_auth/data/iccs_2016_lat_lca.dta")
+```
+
+```{r}
+names(iccs_2016_lat_lca)
+table(iccs_2016_lat_lca$country)
+table(iccs_2016_lat_lca$lca_name)
+```
+
+```{r}
+iccs_2016_lat_lca = iccs_2016_lat_lca %>%
+  dplyr::mutate(time="16") %>%
+  dplyr::mutate (ls3g01a= 5 - ls3g01a)%>% #invertidos
+  dplyr::mutate (ls3g01b= 5 - ls3g01b)%>%
+  dplyr::mutate (ls3g01c= 5 - ls3g01c)%>%
+  dplyr::mutate (ls3g01d= 5 - ls3g01d)%>%
+  dplyr::mutate (ls3g01e= 5 - ls3g01e)%>%
+  dplyr::mutate (ls3g01f= 5 - ls3g01f)%>%
+  dplyr::mutate (ls3g02a= 5 - ls3g02a)%>%
+  dplyr::mutate (ls3g02b= 5 - ls3g02b)%>%
+  dplyr::mutate (ls3g02c= 5 - ls3g02c)%>%
+  dplyr::mutate (ls3g02d= 5 - ls3g02d)%>%
+  dplyr::mutate (ls3g02e= 5 - ls3g02e)
+```
+
+```{r}
+var <- c("ls3g01a", "ls3g01b", "ls3g01c", "ls3g01d", "ls3g01e", "ls3g01f","ls3g02a", "ls3g02b", "ls3g02c", "ls3g02d", "ls3g02e") #var original
+var_f <- c("(government leaders)", "(Violating the rights)", "(Lose authority)", "(Different opinions)", "(Opinion of a country)", "(Government and law)", "(Concentration of power)", "(Close communication media)", "(President and Congress)", "(Dictatorships are justified when they bring order and safety)",("Dictatorships are justified when they bring economic benefits"))
+pais <- c("MEX","DOM","PER", "COL", "CHL") #Paises
+
+for(i in 1:length(var)){
+  
+  mergesvy <-  iccs_2016_lat_lca %>%
+    as_survey_design(
+      strata = jkzones, 
+      weights = totwgts, 
+      ids = jkreps, 
+      nest = TRUE)
+  
+  df_final <-data.frame()
+  
+  for(x in pais){
+    # frequency table via taylor series linearization
+    table_freq_01 <- mergesvy %>%
+      filter(country==x) %>%
+      dplyr::group_by(time, !!sym(var[i])) %>%
+      summarize(proportion = survey_mean(,na.rm=TRUE)) %>% 
+      mutate(country = x)
+    #help(srvyr)
+    
+    df=data.frame(table_freq_01, digits=2)
+    #summary(factor(df$proportion))
+    
+    df= df %>%
+      mutate(perc = proportion * 100) %>%
+      mutate(p=round(perc, 2)) %>%
+      mutate(label=factor(!!sym(var[i]), labels=c("Very disagree", "Disagree", "Agree", "Very agree")))
+    
+    df_final <- rbind(df_final, df)
+    
+  }
+  
+  g1 <- ggplot(df_final , aes(label, proportion)) +
+    facet_grid(country ~ time) +
+    geom_text(aes(label = p), position = position_dodge(0.3), vjust=-0.1)+ 
+    scale_y_continuous(labels = scales::percent, limits = c(0,1)) +
+    theme(axis.text.x = element_text(angle =45, hjust = 1)) +
+    ggtitle(paste0("How much do you agree or disagree with the following statements about the government and its leaders?", var[i], " ", var_f[i])) +
+    labs(x = "Response", y = "%") +
+    geom_col()
+  
+ 
+  print(g1)
+ 
+}
+
+```
+
+```{r}
+#Hay que eliminar los casos donde no hay clase asignada
+filt2 <- filter(iccs_2016_lat_lca, lca_name!="")
+```
+
+```{r}
+# Gráfico para todos los países
+ble=filt2 %>%
+  group_by(country,lca_name) %>%
+  filter(country %in% c("DOM", "CHL", "COL", "MEX", "PER")) %>%  ##Para mantener los países que quiero
+  summarise(mean.mpg = mean(ls3g01a, na.rm = TRUE),
+            sd.mpg = sd(ls3g01a, na.rm = TRUE),
+            n.mpg= n()) %>%
+  mutate(se.mpg = sd.mpg / sqrt(n.mpg),
+         lower.ci.mpg = mean.mpg - qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg,
+         upper.ci.mpg = mean.mpg + qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg)
+
+#El objeto ble se grafica
+#Aqui salen, para 1 variables, todos los países segun las clases, no cacho si es eso 
+ggplot(ble, aes(factor(lca_name),mean.mpg,color = country)) +
+  geom_point(size=5)+
+  geom_errorbar(aes(ymin=lower.ci.mpg, ymax=upper.ci.mpg), width=.1,size=1) 
+
+```
+
+```{r}
+# La media para todos los países de la base
+
+ble1=filt2 %>%
+  group_by(lca_name) %>%
+  summarise(mean.mpg = mean(ls3g01a, na.rm = TRUE),
+            sd.mpg = sd(ls3g01a, na.rm = TRUE),
+            n.mpg= n()) %>%
+  mutate(se.mpg = sd.mpg / sqrt(n.mpg),
+         lower.ci.mpg = mean.mpg - qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg,
+         upper.ci.mpg = mean.mpg + qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg)
+
+ggplot(ble1, aes(factor(lca_name),mean.mpg,color = lca_name)) +
+  geom_point(size=5)+
+  geom_errorbar(aes(ymin=lower.ci.mpg, ymax=upper.ci.mpg), width=.1,size=1) 
+```
+
+```{r}
+#Mismo grafico pero en negro  
+
+ggplot(ble1,              
+       aes(x = lca_name,
+           y = mean.mpg)) +
+  geom_errorbar(aes(ymin=lower.ci.mpg, 
+                    ymax=upper.ci.mpg),
+                width = 0.05, 
+                size  = 0.5) +
+  geom_point(shape = 15, 
+             size  = 4) +
+  theme_bw() +
+  theme(axis.title   = element_text(face  = "bold")) +
+  ylab("Mean")
+
+```
+
+```{r}
+  
+#Loop grafico medias
+map2(.x = var, .y = var_f, .f=function(y, z){
+
+# Map2 trabaja con dos argumentos y map con uno.  
+#y <-"ls3g01a"
+ble=filt2 %>%
+  group_by(country,lca_name) %>%
+  filter(country %in% c("DOM", "CHL", "COL", "MEX", "PER")) %>%  ##Para mantener los países que quiero
+  summarise(mean.mpg = mean(!!sym (y), na.rm = TRUE),
+            sd.mpg = sd(!!sym (y), na.rm = TRUE),
+            n.mpg= n()) %>%
+  mutate(se.mpg = sd.mpg / sqrt(n.mpg),
+         lower.ci.mpg = mean.mpg - qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg,
+         upper.ci.mpg = mean.mpg + qt(1 - (0.05 / 2), n.mpg - 1) * se.mpg)
+
+#Aqui salen, para 1 variables, todos los países segun las clases, no cacho si es eso 
+ggplot(ble, aes(factor(lca_name),mean.mpg, color = country)) +
+  geom_point(size=5)+
+  geom_errorbar(aes(ymin=lower.ci.mpg, ymax=upper.ci.mpg), width=.1,size=1) + 
+  ggtitle(paste0 ("", y, " ", z)) +
+  scale_color_manual(values = c("#000000", "#A9A9A9", "#696969", "#494948", "#2F4F4F")) +
+  labs(x = "clases", y = "promedio")
+})
+
+```
+
